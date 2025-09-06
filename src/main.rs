@@ -1,9 +1,9 @@
 use sha2::{Digest, Sha256};
 use std::fs::File;
 use std::path::Path;
-use std::io::{self, Read};
+use std::io::{self, BufRead, BufReader, Read};
 use walkdir::WalkDir;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::env;
 
 fn compute_file_sha256(file_path: &str) -> io::Result<Vec<u8>> {
@@ -46,17 +46,16 @@ fn main() {
 
     let dir = &args[1];
     let command = &args[2];
+    println!("Watching directory: {}", dir);
+    println!("Command to execute: {}", command);
+    
     let path = Path::new(dir);
     let mut prev_hash = String::new();
-
 
     if !path.is_dir() {
         eprintln!("Error: {} is not a directory", dir);
         std::process::exit(1);
     }
-
-    println!("Watching directory: {}", dir);
-    println!("Command to execute: {}", command);
     
     loop {
         match compute_folder_sha256(dir) {
@@ -64,27 +63,46 @@ fn main() {
                 if prev_hash != hash {
                     println!("\n--- Changes detected, running command ---");
 
-                    let command_parts: Vec<&str> = command.split_whitespace().collect();
-                    let program = command_parts[0];
-                    let args: Vec<&str> = command_parts[1..].to_vec();
+                    // Настраиваем команду с перенаправлением stdout и stderr
+                    let mut cmd = Command::new("sh")
+                        .arg("-c")
+                        .arg(command)
+                        .stdout(Stdio::piped())
+                        .stderr(Stdio::piped())
+                        .spawn()
+                        .expect("Failed to execute command");
 
-                    match Command::new(program)
-                        .args(&args)
-                        .output() {
-                            Ok(output) => {
-                                if !output.stdout.is_empty() {
-                                    println!("\n=== Command Output ===");
-                                    println!("{}", String::from_utf8_lossy(&output.stdout));
-                                }
-                                if !output.stderr.is_empty() {
-                                    println!("\n=== Error Output ===");
-                                    eprintln!("{}", String::from_utf8_lossy(&output.stderr));
-                                }
-                            },
-                            Err(e) => {
-                                eprintln!("\nFailed to execute command: {}", e);
+                    // Получаем stdout и stderr
+                    let stdout = cmd.stdout.take().expect("Failed to capture stdout");
+                    let stderr = cmd.stderr.take().expect("Failed to capture stderr");
+
+                    // Создаем BufReader для чтения вывода построчно
+                    let stdout_reader = BufReader::new(stdout);
+                    let stderr_reader = BufReader::new(stderr);
+
+                    // Запускаем поток для stdout
+                    std::thread::spawn(move || {
+                        for line in stdout_reader.lines() {
+                            match line {
+                                Ok(line) => println!("{}", line),
+                                Err(e) => eprintln!("Error reading stdout: {}", e),
                             }
-                    }
+                        }
+                    });
+
+                    // Запускаем поток для stderr
+                    std::thread::spawn(move || {
+                        for line in stderr_reader.lines() {
+                            match line {
+                                Ok(line) => eprintln!("{}", line),
+                                Err(e) => eprintln!("Error reading stderr: {}", e),
+                            }
+                        }
+                    });
+
+                    // Ждем завершения команды
+                    let status = cmd.wait().expect("Failed to wait on command");
+                    println!("Command finished with status: {:?}", status);
                     
                     prev_hash = hash;
                 }

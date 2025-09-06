@@ -6,6 +6,9 @@ edition = "2021"
 [profile.release]
 lto = true
 
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "link-arg=-mmacosx-version-min=10.15"]
+
 [dependencies]
 cfg-if = "1.0.3"
 cpufeatures = "0.2.17"
