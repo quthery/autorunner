@@ -34,7 +34,7 @@ pub fn calc(path_str: &str) -> Result<String, Error> {
 }
 
 
-pub fn for_file(path: &Path) -> Result<String, Error> {
+fn for_file(path: &Path) -> Result<String, Error> {
         let bytes = fs::read(path)?;
         let hash = sha256::digest(&bytes);
         Ok(hash)
