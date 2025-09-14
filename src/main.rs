@@ -2,21 +2,21 @@ mod cli;
 mod hash;
 mod runner;
 
+use crate::runner::process;
 use clap::Parser;
 use cli::args::CliArgs;
 use std::io::{self};
-use crate::runner::process;
-use std::time::Duration;
 use std::thread;
+use std::time::Duration;
 
 fn main() -> io::Result<()> {
-    let args = CliArgs::parse(); 
+    let args = CliArgs::parse();
     let string_path = args.path.as_deref().expect("Path argument is required");
     let hash = hash::calculate::calc(string_path).expect("error on getting hash");
     let mut prev_hash = hash;
-    
-    let (mut child, mut output_handle, mut should_stop) = process::spawn(&args.command)
-        .expect("Error on executing command");
+
+    let (mut child, mut output_handle, mut should_stop) =
+        process::spawn(&args.command).expect("Error on executing command");
 
     loop {
         match hash::calculate::calc(string_path) {
@@ -30,23 +30,21 @@ fn main() -> io::Result<()> {
                         *stop = true;
                     }
 
-
                     // Убиваем процесс
                     if let Err(e) = child.kill() {
-
                         eprintln!("Error killing process: {}", e);
                         std::process::exit(-1);
                     }
 
-                    // Ждем завершения 
+                    // Ждем завершения
                     if let Err(e) = child.wait() {
                         eprintln!("Error waiting for process: {}", e);
                     }
-  
-                    // Ждем завершения  
+
+                    // Ждем завершения
                     if let Err(e) = output_handle.join() {
                         eprintln!("Error joining output thread: {:?}", e);
-                    } 
+                    }
                     // новый процесс
                     match process::spawn(&args.command) {
                         Ok((new_child, new_output_handle, new_should_stop)) => {
@@ -63,7 +61,7 @@ fn main() -> io::Result<()> {
 
                     prev_hash = hash;
                 }
-            },
+            }
             Err(e) => {
                 eprintln!("Error calculating hash: {}", e);
                 std::process::exit(1);
