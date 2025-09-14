@@ -1,37 +1,59 @@
-use std::process::{Command, Child, Stdio};
-use std::thread;
-use std::io::{self,BufRead, BufReader};
+use std::{
+    io::{self, BufRead, BufReader},
+    process::{Child, Command, Stdio},
+    sync::{Arc, Mutex},
+    thread,
+};
 
-pub fn spawn(command: &str) -> io::Result<(Child, thread::JoinHandle<()>)> {
-    let mut child = Command::new("sh")
-    .arg("-c")
-    .arg(command)
-    .stdout(Stdio::piped())
-    .stderr(Stdio::piped())
-    .spawn()
-    .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Не удалось запустить команду '{}': {}", command, e)))?;
+pub fn spawn(command: &str) -> io::Result<(Child, thread::JoinHandle<()>, Arc<Mutex<bool>>)> {
+    let mut child = Command::new(if cfg!(windows) { "cmd" } else { "sh" })
+        .arg(if cfg!(windows) { "/c" } else { "-c" })
+        .arg(command)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
 
-    let stdout = child.stdout.take().ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Не удалось получить stdout"))?;
-    let stderr = child.stderr.take().ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Не удалось получить stderr"))?;
+    let should_stop = Arc::new(Mutex::new(false));
+    let stop_clone = Arc::clone(&should_stop);
+
+    let stdout = child.stdout.take().unwrap();
+    let stderr = child.stderr.take().unwrap();
 
     let handle = thread::spawn(move || {
-        let stdout_reader = BufReader::new(stdout);
-        let stderr_reader = BufReader::new(stderr);
+        let out_reader = BufReader::new(stdout);
+        let err_reader = BufReader::new(stderr);
 
-        for line in stdout_reader.lines() {
-            match line {
-                Ok(line) => println!("{}", line),
-                Err(e) => eprintln!("Ошибка чтения stdout: {}", e),
-            }
-        }
+        let out_lines = out_reader.lines();
+        let err_lines = err_reader.lines();
 
-        for line in stderr_reader.lines() {
-            match line {
-                Ok(line) => eprintln!("{}", line),
-                Err(e) => eprintln!("Ошибка чтения stderr: {}", e),
+        // Потоки для чтения stdout и stderr
+        let out_thread = thread::spawn({
+            let stop = Arc::clone(&stop_clone);
+            move || {
+                for line in out_lines {
+                    if *stop.lock().unwrap() { break; }
+                    if let Ok(line) = line {
+                        println!("{}", line);
+                    }
+                }
             }
-        }
+        });
+
+        let err_thread = thread::spawn({
+            let stop = Arc::clone(&stop_clone);
+            move || {
+                for line in err_lines {
+                    if *stop.lock().unwrap() { break; }
+                    if let Ok(line) = line {
+                        eprintln!("{}", line);
+                    }
+                }
+            }
+        });
+
+        let _ = out_thread.join();
+        let _ = err_thread.join();
     });
 
-    Ok((child, handle))
-}   
+    Ok((child, handle, should_stop))
+}

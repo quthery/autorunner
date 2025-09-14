@@ -24,35 +24,30 @@ fn main() -> io::Result<()> {
                 if hash != prev_hash {
                     println!("Change detected, restarting process....\n");
 
-                    // Устанавливаем флаг остановки
+                    //  флаг остановки
                     {
                         let mut stop = should_stop.lock().unwrap();
                         *stop = true;
-                        println!("setted to true")
                     }
 
-                    // Ждем завершения потока вывода
-                    if let Err(e) = output_handle.join() {
-                        eprintln!("Error joining output thread: {:?}", e);
-                    } else {
-                        println!("okay")
-                    }
 
                     // Убиваем процесс
                     if let Err(e) = child.kill() {
 
                         eprintln!("Error killing process: {}", e);
                         std::process::exit(-1);
-                    } else {
-                        println!("okay")
                     }
 
-                    // Ждем завершения процесса
+                    // Ждем завершения 
                     if let Err(e) = child.wait() {
                         eprintln!("Error waiting for process: {}", e);
                     }
-
-                    // Создаем новый процесс
+  
+                    // Ждем завершения  
+                    if let Err(e) = output_handle.join() {
+                        eprintln!("Error joining output thread: {:?}", e);
+                    } 
+                    // новый процесс
                     match process::spawn(&args.command) {
                         Ok((new_child, new_output_handle, new_should_stop)) => {
                             child = new_child;
