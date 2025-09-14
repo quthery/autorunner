@@ -4,7 +4,7 @@ use clap::Parser;
 #[command(name = "rerunner", about = "A simple process rerunner")] 
 pub struct CliArgs {
     #[arg(long, short='p', help = "Path to a file or directory", required=true)]
-    pub path: Option<String>,
+    pub  path: Option<String>,
 
     #[arg(long, short = 'c', help = "Command to run", required=true)]
     pub command: String,
