@@ -13,4 +13,5 @@ rustflags = ["-C", "link-arg=-mmacosx-version-min=10.15"]
 clap = {version = "4.5.47", features = [ "derive" ]}
 sha256 = "1.6.0"
 walkdir = "2.5.0"
+colored = "3.0.0"
 

@@ -21,6 +21,7 @@ pub fn spawn(command: &str) -> io::Result<(Child, thread::JoinHandle<()>, Arc<Mu
 
     let handle = thread::spawn(move || {
         let out_reader = BufReader::new(stdout);
+
         let err_reader = BufReader::new(stderr);
 
         let out_lines = out_reader.lines();
@@ -50,7 +51,7 @@ pub fn spawn(command: &str) -> io::Result<(Child, thread::JoinHandle<()>, Arc<Mu
                 }
             }
         });
-
+        
         let _ = out_thread.join();
         let _ = err_thread.join();
     });

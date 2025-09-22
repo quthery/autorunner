@@ -50,6 +50,7 @@ fn for_folder(path: &Path) -> Result<String, Error> {
         .filter(|e| e.path().is_file()) // Только файлы
         .filter_map(|e| e.path().to_str().map(String::from)) // Преобразуем путь в String
         .collect(); // Собираем в Vec<String>
+     
     for entry in entries.iter(){
         let entry_path = Path::new(entry);
         let file_conent = fs::read(entry_path).unwrap();
