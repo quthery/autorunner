@@ -10,24 +10,9 @@ pub fn calc(path_str: &str) -> Result<String, Error> {
         return Err(Error::new(ErrorKind::NotFound, "Path not found"));
     }
     if path.is_dir() {
-        match for_folder(&path) {
-            Ok(hash) =>{
-                Ok(hash)
-            }
-            Err(e) =>
-            {
-                Err(e)
-            }
-        }
+        for_folder(&path)
     } else {
-        match for_file(path) {
-           Ok(hash) => {
-            Ok(hash)
-           }
-           Err(e) => {
-            Err(e)
-           }
-        } 
+        for_file(path)
     }
 
     
@@ -44,18 +29,30 @@ fn for_file(path: &Path) -> Result<String, Error> {
 
 fn for_folder(path: &Path) -> Result<String, Error> {
     let mut files_hashes: Vec<String> = Vec::new();
-    let entries: Vec<String> = WalkDir::new(path) // Начинаем с указанной директории
+    let mut entries: Vec<String> = WalkDir::new(path)
         .into_iter()
-        .filter_map(|e| e.ok()) // Пропускаем ошибки
-        .filter(|e| e.path().is_file()) // Только файлы
-        .filter_map(|e| e.path().to_str().map(String::from)) // Преобразуем путь в String
-        .collect(); // Собираем в Vec<String>
+        .filter_map(|e| match e {
+            Ok(entry) => Some(entry),
+            Err(e) => {
+                eprintln!("Warning: skipping unreadable entry: {}", e);
+                None
+            }
+        })
+        .filter(|e| e.path().is_file())
+        .filter_map(|e| match e.path().to_str() {
+            Some(s) => Some(s.to_string()),
+            None => {
+                eprintln!("Warning: skipping entry with non-UTF-8 path: {:?}", e.path());
+                None
+            }
+        })
+        .collect();
+    entries.sort();
      
     for entry in entries.iter(){
         let entry_path = Path::new(entry);
-        let file_conent = fs::read(entry_path).unwrap();
-        let hash = sha256::digest(String::from_utf8_lossy(&file_conent).into_owned());
-        files_hashes.push(entry.clone());
+        let file_content = fs::read(entry_path)?;
+        let hash = sha256::digest(&file_content[..]);
         files_hashes.push(hash);
     }
 

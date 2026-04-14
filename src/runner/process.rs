@@ -16,8 +16,10 @@ pub fn spawn(command: &str) -> io::Result<(Child, thread::JoinHandle<()>, Arc<Mu
     let should_stop = Arc::new(Mutex::new(false));
     let stop_clone = Arc::clone(&should_stop);
 
-    let stdout = child.stdout.take().unwrap();
-    let stderr = child.stderr.take().unwrap();
+    let stdout = child.stdout.take()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to get stdout handle"))?;
+    let stderr = child.stderr.take()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to get stderr handle"))?;
 
     let handle = thread::spawn(move || {
         let out_reader = BufReader::new(stdout);
@@ -32,7 +34,9 @@ pub fn spawn(command: &str) -> io::Result<(Child, thread::JoinHandle<()>, Arc<Mu
             let stop = Arc::clone(&stop_clone);
             move || {
                 for line in out_lines {
-                    if *stop.lock().unwrap() { break; }
+                    if *stop.lock().unwrap() {
+                        break;
+                    }
                     if let Ok(line) = line {
                         println!("{}", line);
                     }
@@ -44,16 +48,22 @@ pub fn spawn(command: &str) -> io::Result<(Child, thread::JoinHandle<()>, Arc<Mu
             let stop = Arc::clone(&stop_clone);
             move || {
                 for line in err_lines {
-                    if *stop.lock().unwrap() { break; }
+                    if *stop.lock().unwrap() {
+                        break;
+                    }
                     if let Ok(line) = line {
                         eprintln!("{}", line);
                     }
                 }
             }
         });
-        
-        let _ = out_thread.join();
-        let _ = err_thread.join();
+
+        if let Err(e) = out_thread.join() {
+            eprintln!("Output thread panicked: {:?}", e);
+        }
+        if let Err(e) = err_thread.join() {
+            eprintln!("Error thread panicked: {:?}", e);
+        }
     });
 
     Ok((child, handle, should_stop))

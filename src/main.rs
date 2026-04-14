@@ -5,19 +5,20 @@ mod runner;
 use crate::runner::process;
 use clap::Parser;
 use cli::args::CliArgs;
+use colored::Colorize;
 use std::io::{self};
 use std::thread;
 use std::time::Duration;
-use colored::Colorize;
 
 fn main() -> io::Result<()> {
     let args = CliArgs::parse();
-    let string_path = args.path.as_deref().expect("Path argument is required".red().to_string().as_str());
+
+    let string_path = &args.path;
     let hash = hash::calculate::calc(string_path).expect("error on getting hash");
     let mut prev_hash = hash;
 
-    let (mut child, mut output_handle, mut should_stop) =
-        process::spawn(&args.command).expect("Error on executing command".red().to_string().as_str());
+    let (mut child, mut output_handle, mut should_stop) = process::spawn(&args.command)
+        .expect("Error on executing command".red().to_string().as_str());
 
     loop {
         match hash::calculate::calc(string_path) {
@@ -31,18 +32,14 @@ fn main() -> io::Result<()> {
                         *stop = true;
                     }
 
-                    // Убиваем процесс
-                    if let Err(e) = child.kill() {
-                        eprintln!("{}: {}", "Error killing process".red(), e);
-                        std::process::exit(-1);
-                    }
+                    // Убиваем процесс (ignore error — process may have already exited)
+                    let _ = child.kill();
 
-                    // Ждем завершения 
+                    // Ждем завершения
                     if let Err(e) = child.wait() {
                         eprintln!("{}: {}", "Error waiting for process".red(), e);
                     }
 
-                    // Ждем завершения
                     if let Err(e) = output_handle.join() {
                         eprintln!("{} : {:?}", "Error joining output thread".red(), e);
                     }
@@ -55,7 +52,7 @@ fn main() -> io::Result<()> {
                             println!("{}", "New process spawned successfully".green());
                         }
                         Err(e) => {
-                            eprintln!("{}: {}","Error spawning new process".red(), e);
+                            eprintln!("{}: {}", "Error spawning new process".red(), e);
                             std::process::exit(-1);
                         }
                     }
@@ -64,7 +61,6 @@ fn main() -> io::Result<()> {
             }
             Err(e) => {
                 eprintln!("{}: {}", "Error calculating hash".red(), e);
-                std::process::exit(1);
             }
         }
 
